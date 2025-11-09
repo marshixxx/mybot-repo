@@ -15,7 +15,7 @@ API_TOKEN = os.getenv('TELEGRAM_TOKEN')
 client = AsyncOpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 PAYMENT_TOKEN = os.getenv('PAYMENT_TOKEN', '')
 
-# Функции БД
+# Функции БД (20 попыток)
 async def get_user_uses(user_id):
     async with aiosqlite.connect('users.db') as db:
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
@@ -65,7 +65,7 @@ dp = Dispatcher()
 async def start(message: types.Message):
     try:
         print(f"Получена команда /start от {message.from_user.id}")
-        await message.reply("Привет! Я бот с AI. Отправь вопрос!")
+        await message.reply("Привет! Я бот с AI. Отправь вопрос или попроси нарисовать картинку!")
     except Exception as e:
         print(f"Ошибка в /start: {e}")
         await message.reply("Ошибка бота. Попробуй позже.")
@@ -118,14 +118,29 @@ async def handle_message(message: types.Message):
         uses_left = await get_user_uses(user_id)
         if uses_left > 0:
             await decrement_uses(user_id)
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "Ты полезный AI-ассистент на русском языке."},
-                    {"role": "user", "content": message.text}
-                ]
-            )
-            await message.reply(response.choices[0].message.content)
+            text_lower = message.text.lower()
+            # Проверка на генерацию изображения
+            if any(word in text_lower for word in ['нарисуй', 'draw', 'generate image', 'картинка', 'изображение', 'picture']):
+                # Генерация изображения с DALL-E
+                response = await client.images.generate(
+                    model="dall-e-3",
+                    prompt=message.text,  # Промпт для изображения
+                    size="1024x1024",  # Размер (можно 1024x1024, 1792x1024, etc.)
+                    quality="standard",
+                    n=1  # 1 изображение
+                )
+                image_url = response.data[0].url
+                await message.reply_photo(photo=image_url, caption="Вот твоё изображение! 🎨")
+            else:
+                # Стандартный текст от GPT
+                response = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "Ты полезный AI-ассистент на русском языке."},
+                        {"role": "user", "content": message.text}
+                    ]
+                )
+                await message.reply(response.choices[0].message.content)
         else:
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🛒 Стандарт: 200 руб/месяц", callback_data="pay_standard")],
