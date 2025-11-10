@@ -15,7 +15,7 @@ API_TOKEN = os.getenv('TELEGRAM_TOKEN')
 client = AsyncOpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 PAYMENT_TOKEN = os.getenv('PAYMENT_TOKEN', '')
 
-# Функции БД (20 попыток)
+# Функции БД
 async def get_user_uses(user_id):
     async with aiosqlite.connect('users.db') as db:
         await db.execute('''CREATE TABLE IF NOT EXISTS users 
@@ -35,12 +35,12 @@ async def decrement_uses(user_id):
         await db.execute('UPDATE users SET uses = uses - 1 WHERE id = ?', (user_id,))
         await db.commit()
 
-# Функции инвойсов
+# Функции инвойсов с улучшенными описаниями
 async def send_standard_invoice(message_or_query):
     await bot.send_invoice(
         chat_id=message_or_query.chat.id if hasattr(message_or_query, 'chat') else message_or_query.message.chat.id,
-        title="Стандартная подписка",
-        description="Unlimited запросы к AI на 1 месяц. Доступ к gpt-4o-mini.",
+        title="Стандартная подписка на AI-бота",
+        description="Unlimited доступ к нейросети на 1 месяц: генерация текста, изображений, ответы на вопросы с помощью GPT-4o-mini. 20 бесплатных попыток вначале, потом unlimited. Идеально для повседневного использования. Поддержка на русском. Нет рекламы.",
         payload="standard_200rub",
         provider_token=PAYMENT_TOKEN,
         currency="RUB",
@@ -50,8 +50,8 @@ async def send_standard_invoice(message_or_query):
 async def send_premium_invoice(message_or_query):
     await bot.send_invoice(
         chat_id=message_or_query.chat.id if hasattr(message_or_query, 'chat') else message_or_query.message.chat.id,
-        title="Премиум подписка",
-        description="Unlimited запросы на 3 месяца + доступ к продвинутым моделям (gpt-4o).",
+        title="Премиум подписка на AI-бота",
+        description="Unlimited доступ на 3 месяца: генерация текста, изображений (DALL-E), продвинутые модели GPT-4o. 20 бесплатных попыток вначале, потом unlimited с приоритетом. Дополнительно: кастомные промпты, история чата. Идеально для креатива и бизнеса. Поддержка на русском. Нет рекламы.",
         payload="premium_500rub",
         provider_token=PAYMENT_TOKEN,
         currency="RUB",
@@ -119,20 +119,17 @@ async def handle_message(message: types.Message):
         if uses_left > 0:
             await decrement_uses(user_id)
             text_lower = message.text.lower()
-            # Проверка на генерацию изображения
             if any(word in text_lower for word in ['нарисуй', 'draw', 'generate image', 'картинка', 'изображение', 'picture']):
-                # Генерация изображения с DALL-E
                 response = await client.images.generate(
                     model="dall-e-3",
-                    prompt=message.text,  # Промпт для изображения
-                    size="1024x1024",  # Размер (можно 1024x1024, 1792x1024, etc.)
+                    prompt=message.text,
+                    size="1024x1024",
                     quality="standard",
-                    n=1  # 1 изображение
+                    n=1
                 )
                 image_url = response.data[0].url
                 await message.reply_photo(photo=image_url, caption="Вот твоё изображение! 🎨")
             else:
-                # Стандартный текст от GPT
                 response = await client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
